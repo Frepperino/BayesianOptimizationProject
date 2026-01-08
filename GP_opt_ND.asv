@@ -1,137 +1,134 @@
-function [xyz, par_est]=GP_opt_2D(true_fnc, x_bnd, y_bnd, n_init, grid_resolution, beta, nu, sigma2_eps, n_it, plotF)
-% GP_opt_2D
+function [vals, par_est]=GP_opt_ND(true_fnc, n_params, bnds, init_points, beta, nu, sigma2_eps, n_it, plotF)
+% GP_opt_ND
 %
-% [xyz, par_est] = GP_opt_2D(true_fnc, x_bnd, y_bnd, n_init=[5, 5], grid_resolution=1e2, beta=3, ...
+% [vals, par_est] = GP_opt_ND(true_fnc, params, bnds, n_init, beta=3, ...
 %                           sigma2_eps=1e-3, nu=2.5, n_itt=50, plotF=1)
 %
 % true_fnc - Objective function taking one input parameter.
-% x_bnd - Limits on x
-% n_init - Number of initial points taken as
-%          x_init =linspace(x_bnd(1). x_bnd(2), n_init)
-% grid_resolution - Resolution of the optimization grid
-%          x_grid = linspace(x_bnd(1), x_bnd(2), grid_resolution)';
-%          y_grid = linspace(y_bnd(1), y_bnd(2), grid_resolution)';
+% n_params - Number of params/dimensions
+% bnds - n_params x 2 matrix of each dimensions bounds. I.e. bnds(k,1) is
+% the lower bound of dimension k and bnds(k,2) is the upper.
+% init_points - N x n_params matrix of initial points.
 % beta - Acquisition parameter
 % nu - Fixed nu in the Matern covariance
 % n_it - Number of iterations.
 % plotF - Plot optimization progress.
 %
 % Returns:
-%  xyz - matrix with all evaluations points and function values.
+%  vals - (n_init^n_params) x (n_params) matrix with all evaluations points and function values.
 %  par_est - final parameter estimate for the Gaussian Process.
 
 %default values
-if nargin<4 || isempty(n_init), n_init=[1, 1]; end
-if nargin<5 || isempty(grid_resolution), grid_resolution=1e2; end
-if nargin<6 || isempty(beta), beta=3; end
-if nargin<7 || isempty(nu), nu=2.5; end
-if nargin<8 || isempty(sigma2_eps), sigma2_eps=1e-3; end
-if nargin<9 || isempty(n_it), n_it=50; end
-if nargin<10 || isempty(plotF), plotF=1; end
+if nargin<5 || isempty(beta), beta=3; end
+if nargin<6 || isempty(nu), nu=2.5; end
+if nargin<7 || isempty(sigma2_eps), sigma2_eps=1e-3; end
+if nargin<8 || isempty(n_it), n_it=50; end
+if nargin<9 || isempty(plotF), plotF=1; end
 
-%n_init initial points on a regular grid
-if n_init == 1
-    x_init = (x_bnd(1) + x_bnd(2))/2;
-    y_init = (y_bnd(1) + y_bnd(2))/2;
-else
-    x_init = linspace(x_bnd(1), x_bnd(2), n_init(1));
-    y_init = linspace(y_bnd(1), y_bnd(2), n_init(2));
+%rough grid for optimization and plotting
+% S: we store each dimensions grid in a row each.
+gridSize = 1e1;
+axes = cell(1, n_params);
+for i=1:n_params
+  axes{i} = linspace(bnds(i,1), bnds(i,2), gridSize);
+end
+gr = cell(1,n_params);
+[gr{:}] = ndgrid(axes{:});
+grids = zeros(numel(gr{1}), n_params);
+for i = 1:n_params
+    grids(:,i) = gr{i}(:);
 end
 
-x_init
-y_init
-
-[X_init, Y_init] = meshgrid(x_init,y_init); 
-
-%rough grid for optimization and plotting, ca 1000 points in total
-x_grid = linspace(x_bnd(1), x_bnd(2), grid_resolution)';
-y_grid = linspace(y_bnd(1), y_bnd(2), grid_resolution)';
-
-[X_grid,Y_grid] = meshgrid(x_grid,y_grid); 
-
-if plotF
-  %compute value of loss-function on grid for illustration
-  f_grid = true_fnc(X_grid, Y_grid);
-end
 
 %compute value of loss-function for initial x-values
-% S: get total number of inital points to fill up our list of evaluated
-% points. xyz is our expansion of xy from the 1D.
-total_n_init = n_init(1)*n_init(2);
-xyz = zeros(total_n_init+n_it,3);
-j=total_n_init;
-% S: We column stack all the points from the matrix that true_fnc returns.
-f_init = true_fnc(X_init, Y_init)
-xyz(1:total_n_init,:) = [X_init(:), Y_init(:) f_init(:)];
-
-% S: Uncomment this to plot the true function and the initial points for
-% debugging.
-% surf(X_grid, Y_grid, f_grid)
-% xlabel("X")
-% ylabel("Y")
-% hold on
-% for i=1:numel(f_init)
-%     row = xyz(i,:)
-%     plot3(row(1),row(2),row(3),'or', 'MarkerFaceColor', 'r');
-% end
+% S: vals is our ND extension of xy from the 1D script. we store all params
+% + the value in each row.
+n_init_points = size(init_points,1);
+vals = zeros(n_init_points+n_it,n_params+1);
+f_init = true_fnc(init_points);
+vals(1:n_init_points,:) = [init_points(:,:), f_init];
+j=n_init_points;
 
 %initial parameter estimate
 par_est = [];
 
+if plotF
+
+end
 figSurface = figure;
 figPaths = figure;
+title("Parameter paths")
+ylabel("Value")
+% S: I think it might just be cleaner to not plot the first values, or plot
+% them on the same xline maybe?
+xlabel("Point sampled (NOTE THIS IS ONLY ITERATION AFTER n_init_points)")
 hold on
-plot(1:j,xyz(1:j,1), 'o', 'MarkerSize', 5);
-plot(1:j,xyz(1:j,2), 'o', 'MarkerSize', 5);
+for i=1:n_params
+    plot(1:j,vals(1:j,i), 'o', 'MarkerSize', 5);
+end
 hold off
+
 figBest = figure;
-plot(1:j,xyz(1:j,3), 'o', 'MarkerSize', 5);
+title("Best function value")
+ylabel("Value")
+xlabel("Point sampled (NOTE THIS IS ONLY ITERATION AFTER n_init_points)")
+plot(1:j,vals(1:j,end), 'o', 'MarkerSize', 5);
 
 for k=1:n_it
     %fit GP with fixed nu
-    par_est = covest_ml(xyz(1:j,:), 'bomboclat', [0 0 nu sigma2_eps], par_est);
+    par_est = covest_ml(vals(1:j,:), 'bomboclat', [0 0 nu sigma2_eps], par_est);
 
     %reconstruction on grid.
-    % S: We column stack the grid to fit into the reconstuct function.
-    xy0 = [X_grid(:), Y_grid(:)];
-    [y_rec,y_var,S_kk,iS_y] = reconstruct(xyz(1:j,:), xy0, par_est);
-    %S: y_rec and y_var are now in column stacked format so we reshape them.
-    y_rec = reshape(y_rec, size(X_grid));
-    y_var = reshape(y_var, size(X_grid));
+    % S: grids is defined as (n_params) x (points), which is the transpose
+    % of how we want it in reconstruct.
+    [y_rec,y_var,S_kk,iS_y] = reconstruct(vals(1:j,:), grids, par_est);
 
     %find minimum on grid of loss function
-    % S: Since we are in 2D we now do min over all dimensions.
-    [~,Imin]=min(y_rec-beta*sqrt(y_var), [], 'all');
-    % S: Imin is a linear index, so we need to do
-    [row, col] = ind2sub(size(X_grid), Imin);
-    xy_min = [X_grid(row, col), Y_grid(row,col)];
+    [~,Imin]=min(y_rec-beta*sqrt(y_var));
+    Imin
+    vals
+    param_min = grids(Imin, 1:end);
 
     %find minima, using grid minima as starting point
-    xy_min = fminsearch(@(xy) acquisition(xy,x_bnd,y_bnd,beta,xyz(1:j,:),par_est,S_kk,iS_y), xy_min);
+    param_min = fminsearch(@(param) acquisition(param,bnds,beta,vals(1:j,:),par_est,S_kk,iS_y), param_min);
 
     %plots
     if plotF
-        xyz(1:j,:) % Printing points so far.
+        vals(1:j,:) % Printing points so far.
+
         figure(figBest);
         hold on
-        plot(total_n_init:j,cummin(xyz(total_n_init:j,3)));
+        plot(n_init_points:j,cummin(vals(n_init_points:j,end)));
         hold off
+
         figure(figPaths);
         hold on
-        plot(total_n_init:j,xyz(total_n_init:j,1))
-        plot(total_n_init:j,xyz(total_n_init:j,2))
-        legend('Param 1', 'Param 2')
+        for i=1:n_params
+            plot(1:j,vals(1:j,i), 'MarkerSize', 5);
+        end
         hold off
+        
+        % delete:
         figure(figSurface);
+        %[X_grid,Y_grid] = meshgrid(grids(:, 1),grids(:,1));
+        f_grid = true_fnc(grids);
+        size(grids)
+        size(f_grid)
+        X_grid = reshape(grids(:,1), [gridSize, gridSize]);
+        Y_grid = reshape(grids(:,2), [gridSize, gridSize]);
+        size(X_grid)
+        f_grid = reshape(f_grid, size(X_grid));
         h_true = surf(X_grid, Y_grid, f_grid, 'FaceColor', 'b','FaceAlpha', 0.5);
         hold on
-        h_pts = plot3(xyz(1:j,1),xyz(1:j,2),xyz(1:j,3), '*', 'Color', [255/255, 165/255, 0/255]);
-        h_rec = surf(X_grid, Y_grid, y_rec,'FaceColor', 'r');
+        h_pts = plot3(vals(1:j,1),vals(1:j,2),vals(1:j,3), '*', 'Color', [255/255, 165/255, 0/255]);
+        y_recs = reshape(y_rec, size(X_grid));
+        y_vars = reshape(y_var, size(X_grid));
+        h_rec = surf(X_grid, Y_grid, y_recs,'FaceColor', 'r');
         zlims = zlim;   % current z-axis limits
-        h_latest = plot3([xy_min(1) xy_min(1)], [xy_min(2) xy_min(2)], zlims, '-', 'Color', [255/255, 165/255, 0/255] ,'LineWidth', 2);
-        h_acq = surf(X_grid, Y_grid, y_rec - beta*sqrt(y_var), 'FaceColor', 'g', 'FaceAlpha', 0.25);
-        h_var = surf(X_grid, Y_grid, y_rec+2.*sqrt(y_var),'FaceColor', 'k','FaceAlpha', 0.25);
-        surf(X_grid, Y_grid, y_rec-2.*sqrt(y_var),'FaceColor', 'k','FaceAlpha', 0.25);
+        h_latest = plot3([param_min(1) param_min(1)], [param_min(2) param_min(2)], zlims, '-', 'Color', [255/255, 165/255, 0/255] ,'LineWidth', 2);
+        h_acq = surf(X_grid, Y_grid, y_recs - beta*sqrt(y_vars), 'FaceColor', 'g', 'FaceAlpha', 0.25);
+        h_var = surf(X_grid, Y_grid, y_recs+2.*sqrt(y_vars),'FaceColor', 'k','FaceAlpha', 0.25);
+        surf(X_grid, Y_grid, y_recs-2.*sqrt(y_vars),'FaceColor', 'k','FaceAlpha', 0.25);
         legend([h_true, h_pts, h_rec, h_latest, h_acq, h_var], ...
        {'True function', ...
         'Evaluated points', ...
@@ -141,7 +138,7 @@ for k=1:n_it
         'Reconstruction variance'})
         xlabel("Dim 1")
         ylabel("Dim 2")
-        title(sprintf("Iteration %d", k))
+
         if plotF==1
             pause(0.1)
         else
@@ -152,15 +149,18 @@ for k=1:n_it
 
     %updated function evaluations
     j = j+1;
-    xyz(j,:) = [xy_min(1), xy_min(2) true_fnc(xy_min(1), xy_min(2))];
+    vals(j,:) = [param_min true_fnc(param_min)];
 end
 
 %% Distance matrix given rho
-% S: this is made for 2D now. I have not validated.
+% S: remade for all ND. ||x-y||^2 = ||x||^2 + ||y||^2 - 2*x^T*y
+% S: not yet validated
 function D=distance_matrix(p1,p2,rho)
-dx = p1(:,1) - p2(:,1).';
-dy = p1(:,2) - p2(:,2).';
-D = sqrt(dx.^2 + dy.^2)/rho;
+p1s = p1 ./ rho;
+p2s = p2 ./ rho;
+
+D2 = sum(p1s.^2, 2) + sum(p2s.^2, 2).' - 2*(p1s*p2s.');
+D  = sqrt(max(D2,0)); % Just for safety in case negative term gives floating point negative.
 
 %% Matern covariance
 function r=matern_covariance(dist,sigma2,nu)
@@ -198,7 +198,7 @@ end
 r(dpos) = B;
 
 %% Maximum Likelihood Estimation
-function par_est = covest_ml(xyz, covf, par_fixed, par_start)
+function par_est = covest_ml(vals, covf, par_fixed, par_start)
 
 %%%% Not used yet, will be used when expanding to other covariance
 %%%% functions.
@@ -213,12 +213,13 @@ function par_est = covest_ml(xyz, covf, par_fixed, par_start)
 if isempty(par_start)
   par_start = zeros(size(par_fixed));
   %rough estimate of field variance
-  par_start(2) = var(xyz(:,3));
+  par_start(2) = var(vals(:,end));
   %and nugget
   par_start(4) = par_start(2)/5;
   %rough estimate of range
-  % S: distance_matrix is changed. I have not validated.
-  par_start(1) = max(max(distance_matrix(xyz(:,1:2),xyz(:,1:2),1)))/5;
+  % S: distance_matrix is changed but it is still only 2D by pairwise
+  % points.
+  par_start(1) = max(max(distance_matrix(vals(:,1:end-1),vals(:,1:end-1),1)))/5;
 else
   par_start = reshape(par_start,1,[]);
 end
@@ -229,7 +230,7 @@ if isempty(par_fixed)
 end
 
 %define loss function that accounts for fixed parameters
-neg_log_like = @(par) covest_ml_loss(xyz, exp(par), par_fixed);
+neg_log_like = @(par) covest_ml_loss(vals, exp(par), par_fixed);
 %minimize loss function (negative log-likelihood)
 par = fminsearch(neg_log_like, log(par_start(par_fixed==0)));
 
@@ -299,7 +300,7 @@ if length(par_start)~=n_pars
 end
 
 %% loss function for the covariance function
-function nlogf = covest_ml_loss(xyz, par, par0)
+function nlogf = covest_ml_loss(vals, par, par0)
 %merge parameters
 par0(par0==0) = par;
 par=par0;
@@ -309,7 +310,7 @@ sigma2 = par(2);
 nu = par(3);
 sigma2_eps = par(4);
 %compute distance matrix
-D = distance_matrix(xyz(:,1:2),xyz(:,1:2),rho);
+D = distance_matrix(vals(:,1:end-1),vals(:,1:end-1),rho);
 %compute covariance function
 Sigma_yy = matern_covariance(D,sigma2,nu) + sigma2_eps*eye(size(D));
 %compute Choleskey factor
@@ -319,39 +320,36 @@ if p~=0
 	nlogf = realmax/2;
 	return; 
 end
-nlogf = sum(log(diag(R))) + 0.5*sum((xyz(:,3)'/R).^2);
+nlogf = sum(log(diag(R))) + 0.5*sum((vals(:,end)'/R).^2);
 
 %% Function computing reconstructions
-%S: changed x0 to two be a Mx2 list of the positions, and changed xy to xyz
-function [y_rec,y_var,S_kk,iS_y] = reconstruct(xyz,xy0,par,S_kk, iS_y)
+%S: changed x0 to grid, and xy to vals.
+function [y_rec,y_var,S_kk,iS_y] = reconstruct(vals,grid,par,S_kk, iS_y)
 
 if nargin<4 || isempty(S_kk)
-    S_kk = distance_matrix(xyz(:,1:2),xyz(:,1:2),par(1));
+    S_kk = distance_matrix(vals(:,1:end-1),vals(:,1:end-1),par(1));
     S_kk = matern_covariance(S_kk, par(2), par(3));
     S_kk = S_kk + par(4)*eye(size(S_kk));
 end
 if nargin<5 || isempty(iS_y)
-    iS_y = S_kk\xyz(:,3);
+    iS_y = S_kk\vals(:,end);
 end
 
-S_uk = distance_matrix(xy0,xyz(:,1:2),par(1));
+S_uk = distance_matrix(grid,vals(:,1:end-1),par(1));
 S_uk = matern_covariance(S_uk, par(2), par(3));
 
 y_rec = S_uk * iS_y;
 y_var = par(2)+par(4) - sum((S_uk/S_kk).*S_uk,2);
 y_var = max(y_var,0);
 
-% S: remember the y_rec and y_var are column stacked at this point. Which
-% doesnt matter for the acquistion function below because it only calls for
-% a scalar xy0 anyway.
-
 %% acquisition function, used to determine next point
-function l=acquisition(xy, x_bnd, y_bnd, beta, xyz, par, S_kk, iS_y)
-  % ADD LOGIC FOR y_bnd
+function l=acquisition(param, bnds, beta, vals, par, S_kk, iS_y)
   %check bounds
-  if xy(1)<x_bnd(1) || x_bnd(2)<xy(1) || xy(2)<y_bnd(1) || y_bnd(2)<xy(2)
+  % S: if any parameter is less than its lower bound or higher bound. The
+  % transpose is because of bnds row corresponds to each column in param.
+  if any(param < bnds(:,1).') || any(param > bnds(:,2).')
       l = realmax/2;
       return
   end
-  [y_rec,y_var] = reconstruct(xyz,xy,par,S_kk,iS_y);
+  [y_rec,y_var] = reconstruct(vals,param,par,S_kk,iS_y);
   l = y_rec-beta*sqrt(y_var);
