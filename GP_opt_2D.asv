@@ -67,7 +67,23 @@ xyz(1:total_n_init,:) = [X_init(:), Y_init(:) f_init(:)];
 %initial parameter estimate
 par_est = [];
 
+figSurface = figure;
+plot(1:j,xyz(1:j,3), 'x', ;);
+figPaths = figure;
+plot(1:j,xyz(1:j,1), 'x')
+plot(1:j,xyz(1:j,2), 'x')
+figBest = figure;
+
 for k=1:n_it
+    figure(figBest);
+    plot(total_n_init:j,cummin(xyz(total_n_init:j,3)));
+    figure(figPaths);
+    hold on
+    plot(total_n_init:j,xyz(total_n_init:j,1))
+    plot(total_n_init:j,xyz(total_n_init:j,2))
+    legend('Param 1', 'Param 2')
+    hold off
+    figure(figSurface);
     %fit GP with fixed nu
     par_est = covest_ml(xyz(1:j,:), 'bomboclat', [0 0 nu sigma2_eps], par_est);
 
@@ -91,19 +107,26 @@ for k=1:n_it
 
     %plots
     if plotF
-        surf(X_grid, Y_grid, f_grid, 'FaceColor', 'b','FaceAlpha', 0.5)
-        hold on
-        plot3(xyz(1:j,1),xyz(1:j,2),xyz(1:j,3), '*', 'Color', [255/255, 165/255, 0/255])
-        surf(X_grid, Y_grid, y_rec,'FaceColor', 'r')
-        
-        zlims = zlim;   % current z-axis limits
-        plot3([xy_min(1) xy_min(1)], [xy_min(2) xy_min(2)], zlims, '-', 'Color', [255/255, 165/255, 0/255] ,'LineWidth', 2)
-        surf(X_grid, Y_grid, y_rec - beta*sqrt(y_var), 'FaceColor', 'g', 'FaceAlpha', 0.25)
-        surf(X_grid, Y_grid, y_rec+2.*sqrt(y_var),'FaceColor', 'k','FaceAlpha', 0.25)
-        surf(X_grid, Y_grid, y_rec-2.*sqrt(y_var),'FaceColor', 'k','FaceAlpha', 0.25)
         xyz(1:j,:) % Printing points so far.
-        legend('True function', 'Observed points', 'Reconstructed surface', 'Variance')
-        title(k)
+        h_true = surf(X_grid, Y_grid, f_grid, 'FaceColor', 'b','FaceAlpha', 0.5);
+        hold on
+        h_pts = plot3(xyz(1:j,1),xyz(1:j,2),xyz(1:j,3), '*', 'Color', [255/255, 165/255, 0/255]);
+        h_rec = surf(X_grid, Y_grid, y_rec,'FaceColor', 'r');
+        zlims = zlim;   % current z-axis limits
+        h_latest = plot3([xy_min(1) xy_min(1)], [xy_min(2) xy_min(2)], zlims, '-', 'Color', [255/255, 165/255, 0/255] ,'LineWidth', 2);
+        h_acq = surf(X_grid, Y_grid, y_rec - beta*sqrt(y_var), 'FaceColor', 'g', 'FaceAlpha', 0.25);
+        h_var = surf(X_grid, Y_grid, y_rec+2.*sqrt(y_var),'FaceColor', 'k','FaceAlpha', 0.25);
+        surf(X_grid, Y_grid, y_rec-2.*sqrt(y_var),'FaceColor', 'k','FaceAlpha', 0.25);
+        legend([h_true, h_pts, h_rec, h_latest, h_acq, h_var], ...
+       {'True function', ...
+        'Evaluated points', ...
+        'Reconstructed surface', ...
+        'Latest observation', ...
+        'Acquisition surface', ...
+        'Reconstruction variance'})
+        xlabel("Dim 1")
+        ylabel("Dim 2")
+        title(sprintf("Iteration %d", k))
         if plotF==1
             pause(0.1)
         else

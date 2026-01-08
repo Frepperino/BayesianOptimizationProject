@@ -67,7 +67,27 @@ xyz(1:total_n_init,:) = [X_init(:), Y_init(:) f_init(:)];
 %initial parameter estimate
 par_est = [];
 
+figSurface = figure;
+figPaths = figure;
+hold on
+plot(1:j,xyz(1:j,1), 'o', 'MarkerSize', 5);
+plot(1:j,xyz(1:j,2), 'o', 'MarkerSize', 5);
+hold off
+figBest = figure;
+plot(1:j,xyz(1:j,3), 'o', 'MarkerSize', 5);
+
 for k=1:n_it
+    figure(figBest);
+    hold on
+    plot(total_n_init:j,cummin(xyz(total_n_init:j,3)));
+    hold off
+    figure(figPaths);
+    hold on
+    plot(total_n_init:j,xyz(total_n_init:j,1))
+    plot(total_n_init:j,xyz(total_n_init:j,2))
+    legend('Param 1', 'Param 2')
+    hold off
+    figure(figSurface);
     %fit GP with fixed nu
     par_est = covest_ml(xyz(1:j,:), 'bomboclat', [0 0 nu sigma2_eps], par_est);
 
